@@ -1,0 +1,19 @@
+{
+  "name": "PodBean Roam",
+  "author": "Around our Table",
+  "homepage_url": "https://aroundourtable.co",
+  "icons": {
+    "16": "img/rom_16.png",
+    "32": "img/rom_32.png",
+    "48": "img/rom_48.png",
+    "128": "img/rom_128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.podbean.com/liveroom/*"],
+      "css": ["style.css"],
+      "js": ["index.js"]
+    }
+  ],
+  "manifest_version": 2
+}

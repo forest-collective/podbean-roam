@@ -1,0 +1,12 @@
+# artifacts
+/index.js
+/src/**/*.js
+/manifest.js
+/manifest.json
+/podbean-roam.zip
+
+# node
+/node_modules
+
+# yarn
+/yarn-error.log

@@ -1,0 +1,52 @@
+.aot-hide {
+  display: none !important;
+}
+
+#aot-control {
+  overflow-y: auto;
+}
+
+#aot-control .el-card .item {
+  padding: 15px 20px 0 20px;
+}
+
+#aot-control .el-card .item:last-child {
+  padding: 15px 20px;
+}
+
+.aot--statement {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.aot--statement textarea {
+  resize: vertical;
+  font-family: sans-serif;
+  flex-grow: 1;
+  margin-right: 10px;
+}
+
+.aot--avatar {
+  height: 55px;
+  width: 55px;
+  line-height: 55px;
+}
+
+.aot--avatar img {
+  object-fit: cover;
+}
+
+.aot-stats {
+  display: flex;
+  align-items: center;
+}
+
+.aot-stats .aot-stats--name {
+  flex-grow: 1;
+  margin: 0 10px;
+}
+
+.aot-empty {
+  color: #838383;
+}
