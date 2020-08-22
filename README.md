@@ -1,6 +1,8 @@
 PodBean Roam
 ============
 
+![build](https://github.com/aroundourtable/podbean-roam/workflows/build/badge.svg)
+
 A chrome extension to make hosting roams with podbean easier.
 
 This extension simply automates some of the processes necessary for hosting a
