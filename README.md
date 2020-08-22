@@ -1,7 +1,11 @@
 PodBean Roam
 ============
 
-![build](https://github.com/aroundourtable/podbean-roam/workflows/build/badge.svg)
+[![build](https://github.com/aroundourtable/podbean-roam/workflows/build/badge.svg)](https://github.com/aroundourtable/podbean-roam/actions)
+[![license](https://img.shields.io/github/license/aroundourtable/podbean-roam)](https://github.com/aroundourtable/podbean-roam/blob/master/LICENSE)
+[![version](https://img.shields.io/github/package-json/v/aroundourtable/podbean-roam)](https://github.com/aroundourtable/podbean-roam/blob/master/package.json)
+[![docs](https://img.shields.io/badge/docs-master-informational)](https://aroundourtable.github.io/podbean-roam/)
+
 
 A chrome extension to make hosting roams with podbean easier.
 
