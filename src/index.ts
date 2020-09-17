@@ -1,8 +1,6 @@
 import { createControlPanel } from "./control";
 import { anonnull, anchildren, cast } from "./utils";
 
-type NL = NodeListOf<HTMLElement>;
-
 void (async function () {
   const right = await anonnull(
     document.body,
