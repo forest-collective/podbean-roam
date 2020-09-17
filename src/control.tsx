@@ -89,6 +89,11 @@ function replacer(
       datatype: "Set",
       value: [...typedValue],
     };
+  } else if (typedValue instanceof UserLog) {
+    return {
+      datatype: "UserLog",
+      value: Object.assign({}, typedValue),
+    };
   }
   return value;
 }
@@ -102,6 +107,14 @@ function reviver(key: string, value: string): unknown {
       return new Map(typed.value as [unknown, unknown][]);
     } else if (typed.datatype === "Set") {
       return new Set(typed.value as unknown[]);
+    } else if (typed.datatype === "UserLog") {
+      const cast = typed.value as UserLog;
+      return new UserLog(
+        cast.name,
+        cast.avatar,
+        cast.participated,
+        cast.called
+      );
     }
   }
   return value;
