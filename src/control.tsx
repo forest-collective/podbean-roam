@@ -176,16 +176,14 @@ class ControlPanel extends React.Component<
         const newState = callback(olds, oldp);
         if (newState === null) return null;
         const oldState = localStorage.getItem(storageKey);
+        const serializedState = Object.assign(
+          { taskId: this.props.taskId },
+          oldState ? JSON.parse(oldState) : olds,
+          newState
+        );
         localStorage.setItem(
           storageKey,
-          JSON.stringify(
-            Object.assign(
-              { taskId: this.props.taskId },
-              oldState ? JSON.parse(oldState) : olds,
-              newState
-            ),
-            replacer
-          )
+          JSON.stringify(serializedState, replacer)
         );
         return newState;
       });
@@ -238,7 +236,6 @@ class ControlPanel extends React.Component<
           logs.set(caller.id, user);
         }
       }
-      if (!changed) return null;
 
       // compute if adding is possible
       const numCalling = callers.reduce(
@@ -246,11 +243,16 @@ class ControlPanel extends React.Component<
         0
       );
       const numActive = callers.length - numCalling;
+      const canAdd = numCalling > 0 && numActive < props.maxRoamers;
 
-      return {
-        userLogs: logs,
-        canAdd: numCalling > 0 && numActive < props.maxRoamers,
-      };
+      if (!changed && canAdd === state.canAdd) {
+        return null;
+      } else {
+        return {
+          userLogs: logs,
+          canAdd: canAdd,
+        };
+      }
     });
   };
 
