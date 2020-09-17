@@ -1,4 +1,5 @@
 import { anonnull, astate, sleep, cast } from "./utils";
+import { Lock } from "./lock";
 
 type CallState = "calling" | "active" | "speaking";
 
@@ -14,20 +15,16 @@ class CCaller {
 
   connect(): void {
     if (this.state !== "calling") throw new Error("must be calling to connect");
-    void this.handler.process(
-      new QueueState(this.id, this.state, 3, "Connect", false)
-    );
+    void this.handler.process(this.id, this.state, 3, "Connect", false);
   }
 
   disconnect(): void {
     void this.handler.process(
-      new QueueState(
-        this.id,
-        this.state,
-        2,
-        "Disconnect",
-        this.state !== "calling"
-      )
+      this.id,
+      this.state,
+      2,
+      "Disconnect",
+      this.state !== "calling"
     );
   }
 
@@ -67,20 +64,9 @@ function createCaller(handler: CCallHandler, element: HTMLElement): CCaller {
   );
 }
 
-class QueueState {
-  constructor(
-    readonly id: number,
-    readonly state: CallState,
-    readonly buttonPos: number,
-    readonly buttonName: string,
-    readonly confirmation: boolean
-  ) {}
-}
-
 class CCallHandler {
-  // TODO This queue would be much better handled as a lock
-  private queue: QueueState[] = [];
   private actionTimeout: number = 1000;
+  private lock: Lock = new Lock();
   private callbacks: ((callers: Caller[]) => void)[] = [];
   private observer: MutationObserver;
   constructor(private hosts: HTMLElement, private dialog: HTMLElement) {
@@ -125,15 +111,19 @@ class CCallHandler {
     return result;
   }
 
-  async process(action: QueueState): Promise<void> {
-    this.queue.push(action);
-    if (this.queue.length > 1) {
-      return; // something is already running;
-    }
-    while (this.queue.length) {
+  async process(
+    id: number,
+    state: CallState,
+    buttonPos: number,
+    buttonName: string,
+    confirmation: boolean
+  ): Promise<void> {
+    await this.lock.acquire();
+    try {
+      this.dialog.classList.add("aot-hide");
       try {
         await Promise.race([
-          this.processInner(this.queue[0]),
+          this.processInner(id, state, buttonPos, buttonName, confirmation),
           new Promise((_, reject) =>
             setTimeout(
               () => reject(new Error("action timeout")),
@@ -144,18 +134,25 @@ class CCallHandler {
       } catch (ex) {
         console.error(ex);
       }
-      this.queue.shift();
+      this.dialog.classList.remove("aot-hide");
+    } finally {
+      this.lock.release();
     }
-    this.dialog.classList.remove("aot-hide");
   }
 
-  private async processInner(state: QueueState): Promise<void> {
-    const caller = this.getCallers().find((c) => c.id === state.id);
+  private async processInner(
+    id: number,
+    state: CallState,
+    buttonPos: number,
+    buttonName: string,
+    confirmation: boolean
+  ): Promise<void> {
+    const caller = this.getCallers().find((c) => c.id === id);
     // verify caller is still here as we expect
     if (caller === undefined) throw new Error("caller no longer active");
-    if (caller.state !== state.state) {
+    if (caller.state !== state) {
       throw new Error(
-        `callers state was ${caller.state} not expected ${state.state}`
+        `callers state was ${caller.state} not expected ${state}`
       );
     }
 
@@ -173,11 +170,11 @@ class CCallHandler {
 
     // find action button
     const button = this.dialog.querySelector(
-      `.el-dialog__footer button:nth-child(${state.buttonPos})`
+      `.el-dialog__footer button:nth-child(${buttonPos})`
     );
     if (button === null) throw new Error("didn't find dialog button");
     const htmlButton = cast(HTMLElement, button);
-    if (htmlButton.innerText !== state.buttonName) {
+    if (htmlButton.innerText !== buttonName) {
       throw new Error("dialog button didn't have appropriate name");
     }
 
@@ -185,7 +182,7 @@ class CCallHandler {
     htmlButton.click();
 
     // extra confirmation
-    if (state.confirmation) {
+    if (confirmation) {
       await sleep(10);
       // XXX This addition might be a litle late, but since it might not
       // exist before this, this is the best we can do
