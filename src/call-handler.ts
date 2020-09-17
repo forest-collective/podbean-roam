@@ -78,6 +78,7 @@ class QueueState {
 }
 
 class CCallHandler {
+  // TODO This queue would be much better handled as a lock
   private queue: QueueState[] = [];
   private actionTimeout: number = 1000;
   private callbacks: ((callers: Caller[]) => void)[] = [];

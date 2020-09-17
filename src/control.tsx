@@ -180,7 +180,9 @@ class ControlPanel extends React.Component<
           { taskId: this.props.taskId },
           oldState ? JSON.parse(oldState) : olds,
           newState
-        );
+        ) as ControlPanelState & {
+          taskId: string;
+        };
         localStorage.setItem(
           storageKey,
           JSON.stringify(serializedState, replacer)
