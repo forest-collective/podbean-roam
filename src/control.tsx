@@ -64,7 +64,7 @@ class ControlPanelState {
     public readonly statements: string[] = [],
     public readonly ranStatements: Set<number> = new Set(),
     public readonly canAdd: boolean = false,
-    public readonly userLogs: Map<number, UserLog> = new Map<number, UserLog>()
+    public readonly userLogs: Map<string, UserLog> = new Map<string, UserLog>()
   ) {}
 }
 
@@ -199,7 +199,7 @@ class ControlPanel extends React.Component<
       let changed = false;
       let logs = state.userLogs;
       for (const caller of callers) {
-        let user = logs.get(caller.id);
+        let user = logs.get(caller.key());
         if (user === undefined) {
           // not active yet
           user = new UserLog(caller.name, caller.avatar);
@@ -219,7 +219,7 @@ class ControlPanel extends React.Component<
             user.called
           );
           user.participated.add(state.statement);
-          logs.set(caller.id, user);
+          logs.set(caller.key(), user);
         } else if (
           caller.state === "calling" &&
           !user.called.has(state.statement)
@@ -235,7 +235,7 @@ class ControlPanel extends React.Component<
             new Set(user.called)
           );
           user.called.add(state.statement);
-          logs.set(caller.id, user);
+          logs.set(caller.key(), user);
         }
       }
 

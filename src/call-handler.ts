@@ -7,20 +7,32 @@ class CCaller {
   constructor(
     private readonly handler: CCallHandler,
     private readonly clickElement: HTMLElement,
-    readonly id: number,
+    readonly id: number | undefined,
     readonly name: string,
     readonly avatar: string,
     readonly state: CallState
   ) {}
 
+  key(): string {
+    return `${this.id}\0${this.name}`;
+  }
+
   connect(): void {
     if (this.state !== "calling") throw new Error("must be calling to connect");
-    void this.handler.process(this.id, this.state, 3, "Connect", false);
+    void this.handler.process(
+      this.id,
+      this.name,
+      this.state,
+      3,
+      "Connect",
+      false
+    );
   }
 
   disconnect(): void {
     void this.handler.process(
       this.id,
+      this.name,
       this.state,
       2,
       "Disconnect",
@@ -42,7 +54,8 @@ function createCaller(handler: CCallHandler, element: HTMLElement): CCaller {
   const img = element.querySelector(".el-avatar img");
   if (img === null) throw new Error("no image");
   const src = cast(HTMLImageElement, img).src;
-  const id = parseInt(src.split("/")[5]);
+  const idField = src.split("/")[5];
+  const id = idField === undefined ? undefined : parseInt(idField);
   let state: CallState;
   if (element.classList.contains("call-in-progress")) {
     state = "active";
@@ -112,7 +125,8 @@ class CCallHandler {
   }
 
   async process(
-    id: number,
+    id: number | undefined,
+    name: string,
     state: CallState,
     buttonPos: number,
     buttonName: string,
@@ -123,7 +137,14 @@ class CCallHandler {
       this.dialog.classList.add("aot-hide");
       try {
         await Promise.race([
-          this.processInner(id, state, buttonPos, buttonName, confirmation),
+          this.processInner(
+            id,
+            name,
+            state,
+            buttonPos,
+            buttonName,
+            confirmation
+          ),
           new Promise((_, reject) =>
             setTimeout(
               () => reject(new Error("action timeout")),
@@ -141,13 +162,16 @@ class CCallHandler {
   }
 
   private async processInner(
-    id: number,
+    id: number | undefined,
+    name: string,
     state: CallState,
     buttonPos: number,
     buttonName: string,
     confirmation: boolean
   ): Promise<void> {
-    const caller = this.getCallers().find((c) => c.id === id);
+    const caller = this.getCallers().find(
+      (c) => c.id === id && c.name === name
+    );
     // verify caller is still here as we expect
     if (caller === undefined) throw new Error("caller no longer active");
     if (caller.state !== state) {
