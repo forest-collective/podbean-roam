@@ -311,6 +311,9 @@ class ControlPanel extends React.Component<
       caller.disconnect();
     }
     clearInterval(this.timerId);
+    const stat = this.state.statements[this.state.statement];
+    this.props.messenger.sendMessage("Finished Statement: " + stat);
+    this.props.about.setAbout("Previous Statement: " + stat);
     this.setState((state) => {
       return {
         running: false,
