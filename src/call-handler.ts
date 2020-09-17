@@ -142,7 +142,6 @@ class CCallHandler {
         ]);
       } catch (ex) {
         console.error(ex);
-        this.queue.length = 0;
       }
       this.queue.shift();
     }
