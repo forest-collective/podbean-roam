@@ -195,18 +195,21 @@ class CCallHandler {
 
       // XXX This dialog takes some time to register, but not sure why...
       // this is pretty hacky, but I don't know the best way
-      await sleep(50);
-      const confirmButton = await anonnull<HTMLElement>(
-        confirmation,
-        { childList: true, subtree: true },
-        () =>
-          confirmation.querySelector(
-            ".el-message-box__btns > button:nth-child(2)"
-          )
-      );
+      try {
+        await sleep(50);
+        const confirmButton = await anonnull<HTMLElement>(
+          confirmation,
+          { childList: true, subtree: true },
+          () =>
+            confirmation.querySelector(
+              ".el-message-box__btns > button:nth-child(2)"
+            )
+        );
 
-      confirmButton.click();
-      confirmation.classList.remove("aot-hide");
+        confirmButton.click();
+      } finally {
+        confirmation.classList.remove("aot-hide");
+      }
     }
 
     // they finished processing
