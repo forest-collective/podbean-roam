@@ -10,6 +10,7 @@ import { createAllowCalls, AllowCalls } from "./allow-calls";
 import { pick } from "./utils";
 import { createMessenger, Messenger } from "./messenger";
 import { createAbout, About } from "./about";
+import { downloadText } from "./download";
 
 const storageKey = "podbean_roam";
 
@@ -342,11 +343,80 @@ class ControlPanel extends React.Component<
     }
   };
 
-  componentDidMount() {
+  getTitle(): string {
+    const titleSelector = document.querySelector(
+      "#user-profile > div > div.media-body > div.live-room-title"
+    );
+    if (titleSelector && titleSelector instanceof HTMLElement) {
+      return titleSelector.innerText.toLowerCase().replace(/\s+/g, "_");
+    } else {
+      return "unknown_roam";
+    }
+  }
+
+  getTotalPeople(): number {
+    const peopleSelector = document.querySelector("#live_now .total-people");
+    if (!peopleSelector || !(peopleSelector instanceof HTMLElement)) {
+      return 0;
+    }
+    const [, num] = peopleSelector.innerText.split(": ");
+    const val = parseInt(num);
+    if (isNaN(val)) {
+      return 0;
+    } else {
+      return val;
+    }
+  }
+
+  downloadParticipation = (): void => {
+    const head = [
+      `Name (${this.getTotalPeople()} total)`,
+      "Called",
+      "Participated",
+      "PodBean Profile",
+    ].join("\t");
+    const contents = [...this.state.userLogs.entries()]
+      .map(([key, log]) => {
+        const [idstr, name] = key.split("\0");
+        let profile = "";
+        if (idstr !== "0") {
+          profile = `https://www.podbean.com/site/userCenter/followMore/blog/${idstr}`;
+        }
+        return [name, log.called.size, log.participated.size, profile].join(
+          "\t"
+        );
+      })
+      .join("\n");
+    downloadText(
+      `${this.getTitle()}_participation.tsv`,
+      `${head}\n${contents}`
+    );
+  };
+
+  downloadChat = (): void => {
+    const head = ["Name", "Message"].join("\t");
+    const messages = document.querySelector("#message-list-items");
+    const contents = (messages ? [...messages.children] : [])
+      .map((node) => {
+        const nameNode = node.querySelector(".nick-name");
+        const name =
+          nameNode && nameNode instanceof HTMLElement
+            ? nameNode.innerText
+            : "unknown";
+        const msgNode = node.querySelector(".msg-content");
+        const msg =
+          msgNode && msgNode instanceof HTMLElement ? msgNode.innerText : "";
+        return [name, msg].join("\t");
+      })
+      .join("\n");
+    downloadText(`${this.getTitle()}_chat.tsv`, `${head}\n${contents}`);
+  };
+
+  componentDidMount(): void {
     this.props.callHandler.addCallback(this.callerCallback);
   }
 
-  componentWillUnmount() {
+  componentWillUnmount(): void {
     this.props.callHandler.removeCallback(this.callerCallback);
   }
 
@@ -379,7 +449,8 @@ class ControlPanel extends React.Component<
         />
       ) : null
     );
-    let users;
+    let users,
+      download = undefined;
     if (this.state.userLogs.size) {
       users = [...this.state.userLogs.entries()]
         .sort(([, a], [, b]) => b.priority() - a.priority())
@@ -392,6 +463,7 @@ class ControlPanel extends React.Component<
             numParticipated={log.participated.size}
           />
         ));
+      download = this.downloadParticipation;
     } else {
       users = <div className="item aot-empty">No participants yet</div>;
     }
@@ -415,9 +487,24 @@ class ControlPanel extends React.Component<
             />
           </div>
         </Card>
-        {/* TODO pull this out as separate element */}
         <Card collapsible={true} title="Leader Board">
           {users}
+        </Card>
+        <Card collapsible={true} title="Downloads">
+          <div className="item">
+            <Button
+              text="Download Participation"
+              isPrimary={false}
+              onButtonClick={download}
+            />
+          </div>
+          <div className="item">
+            <Button
+              text="Download Chat"
+              isPrimary={false}
+              onButtonClick={this.downloadChat}
+            />
+          </div>
         </Card>
       </React.Fragment>
     );
