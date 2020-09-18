@@ -1,3 +1,8 @@
+/* don't shrink the music box */
+#bg-music {
+  flex-shrink: 0 !important;
+}
+
 .aot-hide {
   display: none !important;
 }

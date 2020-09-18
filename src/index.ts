@@ -7,12 +7,12 @@ void (async function () {
     { childList: true, subtree: true },
     () => document.querySelector(".live-room > :nth-child(3) .left-content")
   );
-  const [dials, soundEffects, music] = await anchildren(right, 3);
+  const [, /*dials*/ soundEffects, music] = await anchildren(right, 3);
 
   // hide silly items
-  for (const node of [soundEffects, music]) {
+  for (const node of [soundEffects]) {
     cast(HTMLElement, node).style.display = "none";
   }
 
-  await createControlPanel(cast(HTMLElement, dials));
+  await createControlPanel(cast(HTMLElement, music));
 })();
