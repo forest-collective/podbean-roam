@@ -14,7 +14,7 @@ class CCaller {
   ) {}
 
   key(): string {
-    return `${this.id}\0${this.name}`;
+    return `${this.id || 0}\0${this.name}`;
   }
 
   connect(): void {
@@ -54,8 +54,24 @@ function createCaller(handler: CCallHandler, element: HTMLElement): CCaller {
   const img = element.querySelector(".el-avatar img");
   if (img === null) throw new Error("no image");
   const src = cast(HTMLImageElement, img).src;
-  const idField = src.split("/")[5];
-  const id = idField === undefined ? undefined : parseInt(idField);
+  let id = undefined;
+  try {
+    const url = new URL(src);
+    const [empty, logo, ilogo, idstr, ...rest] = url.pathname.split("/");
+    const idnum = parseInt(idstr);
+    if (
+      rest.length === 1 &&
+      url.hostname === "pbcdn1.podbean.com" &&
+      empty === "" &&
+      logo === "imglogo" &&
+      ilogo === "image-logo" &&
+      !isNaN(idnum)
+    ) {
+      id = idnum;
+    }
+  } finally {
+    // keep id as undefined
+  }
   let state: CallState;
   if (element.classList.contains("call-in-progress")) {
     state = "active";
