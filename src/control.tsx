@@ -313,7 +313,6 @@ class ControlPanel extends React.Component<
     }
     clearInterval(this.timerId);
     const stat = this.state.statements[this.state.statement];
-    this.props.messenger.sendMessage("Finished Statement: " + stat);
     this.props.about.setAbout("Previous Statement: " + stat);
     this.setState((state) => {
       return {
