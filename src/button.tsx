@@ -1,29 +1,36 @@
-import * as React from "react";
+import React, { ReactElement, MouseEvent } from "react";
 
-export interface ButtonProps {
+interface Props {
   isPrimary: boolean;
   text: string;
-  onButtonClick?: (e: React.MouseEvent) => void;
+  onButtonClick?: (e: MouseEvent) => void;
 }
 
-export class Button extends React.Component<ButtonProps> {
-  render(): React.ReactNode {
-    let classes = "el-button el-button--small";
-    if (this.props.isPrimary) {
-      classes += " el-button--primary";
-    }
-    if (this.props.onButtonClick === undefined) {
-      classes += " is-disabled";
-    }
-    return (
-      <button
-        type="button"
-        className={classes}
-        disabled={this.props.onButtonClick === undefined}
-        onClick={this.props.onButtonClick}
-      >
-        {this.props.text}
-      </button>
-    );
+export function Button({
+  isPrimary,
+  text,
+  onButtonClick,
+}: Props): ReactElement {
+  let classes = "el-button el-button--small";
+  if (isPrimary) {
+    classes += " el-button--primary";
   }
+  if (onButtonClick === undefined) {
+    classes += " is-disabled";
+  }
+  return (
+    <button
+      type="button"
+      className={classes}
+      disabled={onButtonClick === undefined}
+      onClick={onButtonClick}
+    >
+      {text}
+    </button>
+  );
 }
+
+const defaultProps: Partial<Props> = {
+  isPrimary: false,
+};
+Button.defaultProps = defaultProps;

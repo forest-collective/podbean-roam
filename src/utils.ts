@@ -1,9 +1,11 @@
 export function anonnull<T>(
   source: Element,
   config: MutationObserverInit,
-  accept: () => T | null
+  accept: () => T | null,
+  timeout?: number,
+  message?: string
 ): Promise<T> {
-  return new Promise((resolve, reject) => {
+  const prom = new Promise<T>((resolve, reject) => {
     try {
       const init = accept();
       if (init !== null) {
@@ -26,27 +28,54 @@ export function anonnull<T>(
       reject(ex);
     }
   });
+
+  if (!timeout) return prom;
+
+  const defTimeout = timeout;
+
+  async function wait(): Promise<T> {
+    await sleep(defTimeout);
+    throw new Error(`timed out after ${defTimeout}: ${message || ""}`);
+  }
+
+  return Promise.race([prom, wait()]);
 }
 
 export async function astate(
   source: Element,
   config: MutationObserverInit,
-  accept: () => boolean
+  accept: () => boolean,
+  timeout?: number,
+  message?: string
 ): Promise<void> {
-  await anonnull(source, config, () => (accept() ? true : null));
+  await anonnull(
+    source,
+    config,
+    () => (accept() ? true : null),
+    timeout,
+    message
+  );
 }
 
 export async function anchildren(
   source: Element,
-  n: number
+  n: number,
+  timeout?: number,
+  message?: string
 ): Promise<HTMLCollection> {
-  return await anonnull(source, { childList: true }, () => {
-    if (source.children.length >= n) {
-      return source.children;
-    } else {
-      return null;
-    }
-  });
+  return await anonnull(
+    source,
+    { childList: true },
+    () => {
+      if (source.children.length >= n) {
+        return source.children;
+      } else {
+        return null;
+      }
+    },
+    timeout,
+    message
+  );
 }
 
 export function nonnull<T>(val: T | null): val is T {
@@ -84,3 +113,35 @@ export function cast<T>(typ: NewAble<T>, obj: unknown): T {
     throw new TypeError(`${typeof obj} was not ${typ.toString()}`);
   }
 }
+
+cast.boolean = (obj: unknown): boolean => {
+  if (typeof obj === "boolean") {
+    return obj;
+  } else {
+    throw new TypeError(`${typeof obj} was not boolean`);
+  }
+};
+
+cast.number = (obj: unknown): number => {
+  if (typeof obj === "number") {
+    return obj;
+  } else {
+    throw new TypeError(`${typeof obj} was not number`);
+  }
+};
+
+cast.string = (obj: unknown): string => {
+  if (typeof obj === "string") {
+    return obj;
+  } else {
+    throw new TypeError(`${typeof obj} was not string`);
+  }
+};
+
+cast.object = (obj: unknown): Record<string, unknown> => {
+  if (typeof obj === "object" && obj !== null) {
+    return obj as Record<string, unknown>;
+  } else {
+    throw new TypeError(`${typeof obj} was not object`);
+  }
+};

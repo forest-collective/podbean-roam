@@ -11,7 +11,7 @@ export class Lock {
       this.left--;
     } else {
       // wait for the next release
-      await new Promise((resolve) => {
+      await new Promise<void>((resolve) => {
         this.queue.push(resolve);
       });
     }

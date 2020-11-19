@@ -23,7 +23,7 @@ class CCaller {
       this.id,
       this.name,
       this.state,
-      3,
+      2,
       "Connect",
       false
     );
@@ -34,7 +34,7 @@ class CCaller {
       this.id,
       this.name,
       this.state,
-      2,
+      1,
       "Disconnect",
       this.state !== "calling"
     );
@@ -114,6 +114,7 @@ class CCallHandler {
       this.observer.observe(this.hosts, { childList: true });
     }
     this.callbacks.push(callback);
+    callback(this.getCallers());
   }
 
   removeCallback(callback: (callers: Caller[]) => void): void {
@@ -201,12 +202,18 @@ class CCallHandler {
 
     // await dialog popup for user
     await sleep(10);
-    await astate(this.dialog, { childList: true, subtree: true }, () => {
-      const answer = this.dialog.querySelector(".user-name");
-      if (answer === null) return false;
-      const name = cast(HTMLElement, answer).innerText;
-      return name === caller.name;
-    });
+    await astate(
+      this.dialog,
+      { childList: true, subtree: true },
+      () => {
+        const answer = this.dialog.querySelector(".user-name");
+        if (answer === null) return false;
+        const name = cast(HTMLElement, answer).innerText;
+        return name === caller.name;
+      },
+      500,
+      "dialog"
+    );
 
     // find action button
     const button = this.dialog.querySelector(
@@ -229,7 +236,9 @@ class CCallHandler {
       const confirmation = await anonnull(
         document.body,
         { childList: true },
-        () => document.querySelector('[aria-label="Remove co-host/guest"]')
+        () => document.querySelector('[aria-label="Remove co-host/guest"]'),
+        500,
+        "extra confirmation"
       );
       confirmation.classList.add("aot-hide");
 
@@ -243,7 +252,9 @@ class CCallHandler {
           () =>
             confirmation.querySelector(
               ".el-message-box__btns > button:nth-child(2)"
-            )
+            ),
+          500,
+          "confirm button"
         );
 
         confirmButton.click();
@@ -257,7 +268,9 @@ class CCallHandler {
     await astate(
       this.dialog,
       { attributes: true },
-      () => this.dialog.style.display === "none"
+      () => this.dialog.style.display === "none",
+      500,
+      "cleanup"
     );
   }
 }
@@ -270,9 +283,7 @@ export async function createCallHandler(): Promise<CallHandler> {
       document.querySelector(".guests-callins .hosts-content")
     ),
     anonnull(document.body, { childList: true, subtree: true }, () =>
-      document.querySelector(
-        "main.el-main > div.el-dialog__wrapper:nth-child(3)"
-      )
+      document.querySelector("main.el-main > .square-dialog")
     ),
   ]);
   return new CCallHandler(cast(HTMLElement, hosts), cast(HTMLElement, dialog));

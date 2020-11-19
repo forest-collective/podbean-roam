@@ -1,4 +1,4 @@
-import * as React from "react";
+import React, { useState, useEffect, ReactElement } from "react";
 import * as ReactDOM from "react-dom";
 
 import { LeaderBoardUser } from "./leader-board-user";
@@ -7,10 +7,10 @@ import { Statement } from "./statement";
 import { Button } from "./button";
 import { createCallHandler, CallHandler, Caller } from "./call-handler";
 import { createAllowCalls, AllowCalls } from "./allow-calls";
-import { pick } from "./utils";
+import { pick, cast } from "./utils";
 import { createMessenger, Messenger } from "./messenger";
 import { createAbout, About } from "./about";
-import { downloadText } from "./download";
+import { UserLog, downloadParticipation, downloadChat } from "./download";
 
 const storageKey = "podbean_roam";
 
@@ -33,7 +33,7 @@ function abbrev(str: string, truncation: number = 12): string {
   }
 }
 
-interface ControlPanelProps {
+interface Props {
   taskId: string | null;
   questionLengthMin: number;
   maxRoamers: number;
@@ -43,474 +43,312 @@ interface ControlPanelProps {
   about: About;
 }
 
-class UserLog {
-  constructor(
-    public readonly name: string,
-    public readonly avatar: string,
-    public readonly participated: Set<number> = new Set(),
-    public readonly called: Set<number> = new Set()
-  ) {}
+function ControlPanel({
+  taskId,
+  questionLengthMin,
+  maxRoamers,
+  allowCalls,
+  callHandler,
+  messenger,
+  about,
+}: Props): ReactElement {
+  const [running, setRunning] = useState(false);
+  const [startTime, setStartTime] = useState(new Date());
+  const [secondsLeft, setSecondsLeft] = useState(0);
+  const [statement, setStatement] = useState(-1);
+  const [statements, setStatements] = useState<string[]>([]);
+  const [ranStatements, setRanStatements] = useState(new Set<number>());
+  const [canAdd, setCanAdd] = useState(false);
+  const [userLogs, setUserLogs] = useState(new Map<string, UserLog>());
+  const [timerId, setTimerId] = useState(0);
 
-  priority(): number {
-    return this.called.size - this.participated.size;
-  }
-}
-
-class ControlPanelState {
-  constructor(
-    public readonly running: boolean = false,
-    public readonly startTime: Date = new Date(),
-    public readonly secondsLeft: number = 0,
-    public readonly statement: number = -1,
-    public readonly statements: string[] = [],
-    public readonly ranStatements: Set<number> = new Set(),
-    public readonly canAdd: boolean = false,
-    public readonly userLogs: Map<string, UserLog> = new Map<string, UserLog>()
-  ) {}
-}
-
-function replacer(
-  this: Record<string, unknown>,
-  key: string,
-  value: unknown
-): unknown {
-  const typedValue = this[key];
-  if (typedValue instanceof Date) {
-    return {
-      datatype: "Date",
-      value: value,
-    };
-  } else if (typedValue instanceof Map) {
-    return {
-      datatype: "Map",
-      value: [...typedValue.entries()],
-    };
-  } else if (typedValue instanceof Set) {
-    return {
-      datatype: "Set",
-      value: [...typedValue],
-    };
-  } else if (typedValue instanceof UserLog) {
-    return {
-      datatype: "UserLog",
-      value: Object.assign({}, typedValue),
-    };
-  }
-  return value;
-}
-
-function reviver(key: string, value: string): unknown {
-  if (typeof value === "object" && value !== null) {
-    const typed = value as { datatype?: string; value: unknown };
-    if (typed.datatype === "Date") {
-      return new Date(typed.value as string);
-    } else if (typed.datatype === "Map") {
-      return new Map(typed.value as [unknown, unknown][]);
-    } else if (typed.datatype === "Set") {
-      return new Set(typed.value as unknown[]);
-    } else if (typed.datatype === "UserLog") {
-      const cast = typed.value as UserLog;
-      return new UserLog(
-        cast.name,
-        cast.avatar,
-        cast.participated,
-        cast.called
-      );
-    }
-  }
-  return value;
-}
-
-function loadState(currentId: string | null): ControlPanelState | null {
-  try {
-    if (currentId === null) return null;
-    const loaded = localStorage.getItem(storageKey);
-    if (loaded === null) return null;
-    // XXX This is unsafe, but works if the replacer and reviver are written
-    // properly, and the taskId checking should clear on every new session
-    const parsed = JSON.parse(loaded, reviver) as ControlPanelState & {
-      taskId: string | null;
-    };
-    if (parsed.taskId !== currentId) return null;
-    return parsed;
-  } catch (ex) {
-    console.error("failed to load state:", ex);
-    return null;
-  }
-}
-
-class ControlPanel extends React.Component<
-  ControlPanelProps,
-  ControlPanelState
-> {
-  timerId: number = 0;
-
-  constructor(props: ControlPanelProps) {
-    super(props);
-    this.state = loadState(this.props.taskId) || new ControlPanelState();
-    localStorage.setItem(
-      storageKey,
-      JSON.stringify(
-        Object.assign({ taskId: this.props.taskId }, this.state),
-        replacer
-      )
-    );
-    if (this.state.running) {
-      this.props.allowCalls.enableCalls();
-      this.timerId = window.setInterval(() => this.tick(), 1000);
-    } else {
-      this.props.allowCalls.disableCalls();
-    }
-    this.callerCallback(this.props.callHandler.getCallers());
-  }
-
-  setState<K extends keyof ControlPanelState>(
-    callback: (
-      state: Readonly<ControlPanelState>,
-      props: Readonly<ControlPanelProps>
-    ) => Pick<ControlPanelState, K> | null
-  ): void {
-    if (this.props.taskId === null) {
-      super.setState(callback);
-    } else {
-      super.setState((olds, oldp) => {
-        const newState = callback(olds, oldp);
-        if (newState === null) return null;
-        const oldState = localStorage.getItem(storageKey);
-        const serializedState = Object.assign(
-          { taskId: this.props.taskId },
-          oldState ? JSON.parse(oldState) : olds,
-          newState
-        ) as ControlPanelState & {
-          taskId: string;
-        };
-        localStorage.setItem(
-          storageKey,
-          JSON.stringify(serializedState, replacer)
+  function startTick(started: Date) {
+    setTimerId(
+      window.setInterval(() => {
+        setSecondsLeft(
+          questionLengthMin * 60 - Math.round((+new Date() - +started) / 1000)
         );
-        return newState;
-      });
-    }
+      }, 1000)
+    );
   }
 
-  callerCallback = (callers: Caller[]): void => {
-    this.setState((state, props) => {
-      // compute changes to user stats
-      if (!state.running) return null;
-      let changed = false;
-      let logs = state.userLogs;
-      for (const caller of callers) {
-        let user = logs.get(caller.key());
-        if (user === undefined) {
-          // not active yet
-          user = new UserLog(caller.name, caller.avatar);
-        }
-        if (
-          caller.state === "active" &&
-          !user.participated.has(state.statement)
-        ) {
-          if (!changed) {
-            logs = new Map(logs.entries());
-            changed = true;
-          }
-          user = new UserLog(
-            user.name,
-            user.avatar,
-            new Set(user.participated),
-            user.called
-          );
-          user.participated.add(state.statement);
-          logs.set(caller.key(), user);
-        } else if (
-          caller.state === "calling" &&
-          !user.called.has(state.statement)
-        ) {
-          if (!changed) {
-            logs = new Map(logs.entries());
-            changed = true;
-          }
-          user = new UserLog(
-            user.name,
-            user.avatar,
-            user.participated,
-            new Set(user.called)
-          );
-          user.called.add(state.statement);
-          logs.set(caller.key(), user);
-        }
-      }
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(storageKey);
+      if (stored === null) return; // no data
+      const loaded = cast.object(JSON.parse(stored));
+      const id = cast.string(loaded.taskId);
+      if (id !== taskId) return; // different session
 
-      // compute if adding is possible
-      const numCalling = callers.reduce(
-        (a, c) => a + +(c.state === "calling"),
-        0
+      const newRunning = cast.boolean(loaded.running);
+      const newStartTime = new Date(cast.number(loaded.startTime));
+      const newSecondsLeft = cast.number(loaded.secondsLeft);
+      const newStatement = cast.number(loaded.statement);
+      const newStatements = cast(Array, loaded.statements).map(cast.string);
+      const newRanStatements = new Set(
+        cast(Array, loaded.ranStatements).map(cast.number)
       );
-      const numActive = callers.length - numCalling;
-      const canAdd = numCalling > 0 && numActive < props.maxRoamers;
+      const newCanAdd = cast.boolean(loaded.canAdd);
+      const newUserLogs = new Map(
+        cast(Array, loaded.userLogs).map((entry): [string, UserLog] => {
+          const [key, log] = cast(Array, entry);
+          const newKey = cast.string(key);
+          const rec = cast.object(log);
+          const newLog = new UserLog(
+            cast.string(rec.name),
+            cast.string(rec.avatar),
+            cast(Array, rec.participated).map(cast.number),
+            cast(Array, rec.called).map(cast.number)
+          );
+          return [newKey, newLog];
+        })
+      );
 
-      if (!changed && canAdd === state.canAdd) {
-        return null;
+      // do all of these last, in case there are errors
+      setRunning(newRunning);
+      setStartTime(newStartTime);
+      setSecondsLeft(newSecondsLeft);
+      setStatement(newStatement);
+      setStatements(newStatements);
+      setRanStatements(newRanStatements);
+      setCanAdd(newCanAdd);
+      setUserLogs(newUserLogs);
+
+      if (newRunning) {
+        startTick(newStartTime);
+        allowCalls.enableCalls();
       } else {
-        return {
-          userLogs: logs,
-          canAdd: canAdd,
-        };
+        allowCalls.disableCalls();
       }
-    });
-  };
+    } catch (ex) {
+      console.error("failed loading state:", ex);
+    }
+  }, []);
 
-  tick = (): void => {
-    this.setState((state, props) => ({
-      secondsLeft:
-        props.questionLengthMin * 60 -
-        Math.round((+new Date() - +state.startTime) / 1000),
-    }));
-  };
+  useEffect(() => {
+    if (taskId === null) return;
+    const serializedState = {
+      taskId,
+      running,
+      startTime: +startTime,
+      secondsLeft,
+      statement,
+      statements,
+      ranStatements: [...ranStatements],
+      canAdd,
+      userLogs: [...userLogs.entries()].map(([key, log]) => [
+        key,
+        log.serialize(),
+      ]),
+    };
+    localStorage.setItem(storageKey, JSON.stringify(serializedState));
+  });
 
-  addStatement = (): void => {
-    this.setState((state) => ({
-      statements: [...state.statements, "[click to edit statement]"],
-    }));
-  };
-
-  updateStatement = (index: number, statement: string): void => {
-    this.setState((state) => {
-      const newStatements = state.statements.slice();
-      newStatements[index] = statement;
-      return {
-        statements: newStatements,
-      };
-    });
-  };
-
-  startStatement = (index: number): void => {
-    this.props.allowCalls.enableCalls();
-    this.timerId = window.setInterval(this.tick, 1000);
-    this.setState((state, props) => {
-      const stat = state.statements[index];
-      props.messenger.sendMessage("Starting Statement: " + stat);
-      props.about.setAbout("Current Statement: " + stat);
-      let ranStatements = state.ranStatements;
-      if (!ranStatements.has(index)) {
-        ranStatements = new Set(ranStatements);
-        ranStatements.add(index);
+  function callerCallback(callers: Caller[]): void {
+    // compute changes to user stats
+    if (!running) return;
+    let changed = false;
+    let logs = userLogs;
+    for (const caller of callers) {
+      let user = logs.get(caller.key());
+      if (user === undefined) {
+        // not active yet
+        user = new UserLog(caller.name, caller.avatar);
       }
-      return {
-        running: true,
-        startTime: new Date(),
-        secondsLeft: props.questionLengthMin * 60,
-        ranStatements: ranStatements,
-        statement: index,
-      };
-    });
-    this.callerCallback(this.props.callHandler.getCallers());
-  };
+      if (caller.state === "active" && !user.participated.has(statement)) {
+        if (!changed) {
+          logs = new Map(logs.entries());
+          changed = true;
+        }
+        user = new UserLog(
+          user.name,
+          user.avatar,
+          new Set(user.participated),
+          user.called
+        );
+        user.participated.add(statement);
+        logs.set(caller.key(), user);
+      } else if (caller.state === "calling" && !user.called.has(statement)) {
+        if (!changed) {
+          logs = new Map(logs.entries());
+          changed = true;
+        }
+        user = new UserLog(
+          user.name,
+          user.avatar,
+          user.participated,
+          new Set(user.called)
+        );
+        user.called.add(statement);
+        logs.set(caller.key(), user);
+      }
+    }
+    if (changed) {
+      setUserLogs(logs);
+    }
 
-  endStatement = (): void => {
-    this.props.allowCalls.disableCalls();
-    for (const caller of this.props.callHandler.getCallers()) {
+    // compute if adding is possible
+    const numCalling = callers.reduce(
+      (a, c) => a + +(c.state === "calling"),
+      0
+    );
+    const numActive = callers.length - numCalling;
+    const canAdd = numCalling > 0 && numActive < maxRoamers;
+    setCanAdd(canAdd);
+  }
+
+  useEffect(() => {
+    callHandler.addCallback(callerCallback);
+    return () => {
+      callHandler.removeCallback(callerCallback);
+    };
+  }, [running, canAdd, userLogs]);
+
+  function addStatement(): void {
+    setStatements([...statements, "[click to edit statement]"]);
+  }
+
+  function updateStatement(index: number, statement: string): void {
+    const newStatements = statements.slice();
+    newStatements[index] = statement;
+    setStatements(newStatements);
+  }
+
+  function startStatement(index: number): void {
+    allowCalls.enableCalls();
+    const localStartTime = new Date();
+    setStartTime(localStartTime);
+    startTick(localStartTime);
+    const stat = statements[index];
+    messenger.sendMessage("Starting Statement: " + stat);
+    about.setAbout("Current Statement: " + stat);
+    if (!ranStatements.has(index)) {
+      const newRanStatements = new Set(ranStatements);
+      newRanStatements.add(index);
+      setRanStatements(newRanStatements);
+    }
+    setRunning(true);
+    setSecondsLeft(questionLengthMin * 60);
+    setStatement(index);
+    callerCallback(callHandler.getCallers());
+  }
+
+  function endStatement(): void {
+    allowCalls.disableCalls();
+    for (const caller of callHandler.getCallers()) {
       caller.disconnect();
     }
-    clearInterval(this.timerId);
-    const stat = this.state.statements[this.state.statement];
-    this.props.about.setAbout("Previous Statement: " + stat);
-    this.setState((state) => {
-      return {
-        running: false,
-        startTime: state.startTime,
-        secondsLeft: 0,
-        statement: state.statement,
-      };
-    });
-  };
+    clearInterval(timerId);
+    const stat = statements[statement];
+    about.setAbout("Previous Statement: " + stat);
+    setRunning(false);
+    setSecondsLeft(0);
+  }
 
-  autoAdd = (): void => {
-    const allCallers = this.props.callHandler.getCallers();
+  function autoAdd(): void {
+    const allCallers = callHandler.getCallers();
     const existing = allCallers.filter((caller) => caller.state === "active")
       .length;
     const eligable = allCallers.filter((caller) => caller.state === "calling");
     // TODO Better algorithm than pure random
-    const [accepted, rejected] = pick(
-      eligable,
-      this.props.maxRoamers - existing
-    );
+    const [accepted, rejected] = pick(eligable, maxRoamers - existing);
     for (const caller of accepted) {
       caller.connect();
     }
     for (const caller of rejected) {
       caller.disconnect();
     }
-  };
-
-  getTitle(): string {
-    const titleSelector = document.querySelector(
-      "#user-profile > div > div.media-body > div.live-room-title"
-    );
-    if (titleSelector && titleSelector instanceof HTMLElement) {
-      return titleSelector.innerText.toLowerCase().replace(/\s+/g, "_");
-    } else {
-      return "unknown_roam";
-    }
   }
 
-  getTotalPeople(): number {
-    const peopleSelector = document.querySelector("#live_now .total-people");
-    if (!peopleSelector || !(peopleSelector instanceof HTMLElement)) {
-      return 0;
-    }
-    const [, num] = peopleSelector.innerText.split(": ");
-    const val = parseInt(num);
-    if (isNaN(val)) {
-      return 0;
-    } else {
-      return val;
-    }
+  let infoText;
+  if (running) {
+    const timeLeft = formatTimeLeft(secondsLeft);
+    const stat = abbrev(statements[statement]);
+    infoText = `${timeLeft} left in statement: ${stat}`;
+  } else if (statement === -1) {
+    infoText = "New roam";
+  } else {
+    const stat = abbrev(statements[statement]);
+    infoText = `Finished statement: ${stat}`;
   }
-
-  downloadParticipation = (): void => {
-    const head = [
-      `Name (${this.getTotalPeople()} total)`,
-      "Called",
-      "Participated",
-      "PodBean Profile",
-    ].join("\t");
-    const contents = [...this.state.userLogs.entries()]
-      .map(([key, log]) => {
-        const [idstr, name] = key.split("\0");
-        let profile = "";
-        if (idstr !== "0") {
-          profile = `https://www.podbean.com/site/userCenter/followMore/blog/${idstr}`;
-        }
-        return [name, log.called.size, log.participated.size, profile].join(
-          "\t"
-        );
-      })
-      .join("\n");
-    downloadText(
-      `${this.getTitle()}_participation.tsv`,
-      `${head}\n${contents}`
-    );
-  };
-
-  downloadChat = (): void => {
-    const head = ["Name", "Message"].join("\t");
-    const messages = document.querySelector("#message-list-items");
-    const contents = (messages ? [...messages.children] : [])
-      .map((node) => {
-        const nameNode = node.querySelector(".nick-name");
-        const name =
-          nameNode && nameNode instanceof HTMLElement
-            ? nameNode.innerText
-            : "unknown";
-        const msgNode = node.querySelector(".msg-content");
-        const msg =
-          msgNode && msgNode instanceof HTMLElement ? msgNode.innerText : "";
-        return [name, msg].join("\t");
-      })
-      .join("\n");
-    downloadText(`${this.getTitle()}_chat.tsv`, `${head}\n${contents}`);
-  };
-
-  componentDidMount(): void {
-    this.props.callHandler.addCallback(this.callerCallback);
-  }
-
-  componentWillUnmount(): void {
-    this.props.callHandler.removeCallback(this.callerCallback);
-  }
-
-  render(): React.ReactNode {
-    let infoText;
-    if (this.state.running) {
-      const timeLeft = formatTimeLeft(this.state.secondsLeft);
-      const statement = abbrev(this.state.statements[this.state.statement]);
-      infoText = `${timeLeft} left in statement: ${statement}`;
-    } else if (this.state.statement === -1) {
-      infoText = "New roam";
-    } else {
-      const statement = abbrev(this.state.statements[this.state.statement]);
-      infoText = `Finished statement: ${statement}`;
-    }
-    const autoAddClick =
-      this.state.running && this.state.canAdd ? this.autoAdd : undefined;
-    const renderedStatements = this.state.statements.map((stat, i) =>
-      stat ? (
-        <Statement
-          key={i}
-          index={i}
-          statement={stat}
-          running={this.state.running && i === this.state.statement}
-          ran={this.state.ranStatements.has(i)}
-          otherRunning={this.state.running && i !== this.state.statement}
-          saveStatement={this.updateStatement}
-          startStatement={this.startStatement}
-          endStatement={this.endStatement}
+  const autoAddClick = running && canAdd ? autoAdd : undefined;
+  const renderedStatements = statements.map((stat, i) =>
+    stat ? (
+      <Statement
+        key={i}
+        index={i}
+        statement={stat}
+        running={running && i === statement}
+        ran={ranStatements.has(i)}
+        otherRunning={running && i !== statement}
+        saveStatement={updateStatement}
+        startStatement={startStatement}
+        endStatement={endStatement}
+      />
+    ) : null
+  );
+  let users,
+    download = undefined;
+  if (userLogs.size) {
+    users = [...userLogs.entries()]
+      .sort(([, a], [, b]) => b.priority() - a.priority())
+      .map(([id, log]) => (
+        <LeaderBoardUser
+          key={id}
+          name={log.name}
+          avatar={log.avatar}
+          numCalled={log.called.size}
+          numParticipated={log.participated.size}
         />
-      ) : null
-    );
-    let users,
-      download = undefined;
-    if (this.state.userLogs.size) {
-      users = [...this.state.userLogs.entries()]
-        .sort(([, a], [, b]) => b.priority() - a.priority())
-        .map(([id, log]) => (
-          <LeaderBoardUser
-            key={id}
-            name={log.name}
-            avatar={log.avatar}
-            numCalled={log.called.size}
-            numParticipated={log.participated.size}
-          />
-        ));
-      download = this.downloadParticipation;
-    } else {
-      users = <div className="item aot-empty">No participants yet</div>;
-    }
-    return (
-      <React.Fragment>
-        <Card collapsible={false} title="AOT Controls">
-          <div className="item">{infoText}</div>
-          <div className="item">
-            <Button
-              text="Add Participants"
-              isPrimary={this.state.running}
-              onButtonClick={autoAddClick}
-            />
-          </div>
-          {renderedStatements}
-          <div className="item">
-            <Button
-              text="Add Statement"
-              isPrimary={false}
-              onButtonClick={this.addStatement}
-            />
-          </div>
-        </Card>
-        <Card collapsible={true} title="Leader Board">
-          {users}
-        </Card>
-        <Card collapsible={true} title="Downloads">
-          <div className="item">
-            <Button
-              text="Download Participation"
-              isPrimary={false}
-              onButtonClick={download}
-            />
-          </div>
-          <div className="item">
-            <Button
-              text="Download Chat"
-              isPrimary={false}
-              onButtonClick={this.downloadChat}
-            />
-          </div>
-        </Card>
-      </React.Fragment>
-    );
+      ));
+    download = () => downloadParticipation(userLogs);
+  } else {
+    users = <div className="item aot-empty">No participants yet</div>;
   }
+  return (
+    <>
+      <Card collapsible={true} title="AOT Controls">
+        <div className="item">{infoText}</div>
+        <div className="item">
+          <Button
+            text="Add Participants"
+            isPrimary={running}
+            onButtonClick={autoAddClick}
+          />
+        </div>
+        {renderedStatements}
+        <div className="item">
+          <Button
+            text="Add Statement"
+            isPrimary={false}
+            onButtonClick={addStatement}
+          />
+        </div>
+      </Card>
+      <Card collapsible={true} title="Leader Board">
+        {users}
+      </Card>
+      <Card collapsible={true} title="Downloads">
+        <div className="item">
+          <Button
+            text="Download Participation"
+            isPrimary={false}
+            onButtonClick={download}
+          />
+        </div>
+        <div className="item">
+          <Button
+            text="Download Chat"
+            isPrimary={false}
+            onButtonClick={downloadChat}
+          />
+        </div>
+      </Card>
+    </>
+  );
 }
 
-export async function createControlPanel(sibling: HTMLElement): Promise<void> {
+export async function createControlPanel(music: HTMLElement): Promise<void> {
   const taskId = new URLSearchParams(window.location.search).get(
     "live_task_id"
   );
@@ -523,7 +361,7 @@ export async function createControlPanel(sibling: HTMLElement): Promise<void> {
 
   const root = document.createElement("div");
   root.id = "aot-control";
-  sibling.insertAdjacentElement("afterend", root);
+  music.insertAdjacentElement("beforebegin", root);
   ReactDOM.render(
     <ControlPanel
       taskId={taskId}

@@ -1,6 +1,21 @@
 /* don't shrink the music box */
 #bg-music {
-  flex-shrink: 0 !important;
+  flex-grow: 0;
+  flex-shrink: 0;
+  overflow: hidden !important;
+}
+
+#bg-music > * {
+  flex-shrink: 0;
+}
+
+.left-content {
+  overflow-y: auto !important;
+}
+
+/* Hide sound effects */
+main > .live-room > .el-col.el-col-5 > div > div:nth-child(2) {
+  display: none !important;
 }
 
 .aot-hide {
@@ -8,7 +23,7 @@
 }
 
 #aot-control {
-  overflow-y: auto;
+  flex-shrink: 0;
 }
 
 #aot-control .el-card .item {

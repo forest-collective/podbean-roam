@@ -1,8 +1,13 @@
-import * as React from "react";
+import React, {
+  useState,
+  ReactElement,
+  ChangeEvent,
+  KeyboardEvent,
+} from "react";
 
 import { Button } from "./button";
 
-export interface StatementProps {
+interface Props {
   index: number;
   statement: string;
   running: boolean;
@@ -13,81 +18,74 @@ export interface StatementProps {
   endStatement: () => void;
 }
 
-class StatementState {
-  constructor(public statement: string, public beingEdited: boolean = false) {}
-}
+export function Statement({
+  index,
+  statement,
+  running,
+  ran,
+  otherRunning,
+  saveStatement,
+  startStatement,
+  endStatement,
+}: Props): ReactElement {
+  const [editStatement, setStatement] = useState(statement);
+  const [beingEdited, setEditStatus] = useState(false);
 
-export class Statement extends React.Component<StatementProps, StatementState> {
-  state: StatementState = new StatementState(this.props.statement);
+  function makeEditable(): void {
+    setStatement(statement);
+    setEditStatus(true);
+  }
 
-  makeEditable = (): void => {
-    this.setState({ beingEdited: true, statement: this.props.statement });
-  };
+  function handleChange(event: ChangeEvent<HTMLTextAreaElement>): void {
+    setStatement(event.target.value);
+  }
 
-  handleChange = (event: React.ChangeEvent<HTMLTextAreaElement>): void => {
-    this.setState({ statement: event.target.value });
-  };
+  function handleSave(): void {
+    setEditStatus(false);
+    saveStatement(index, editStatement);
+  }
 
-  handleSave = (): void => {
-    this.setState({ beingEdited: false });
-    this.props.saveStatement(this.props.index, this.state.statement);
-  };
-
-  handleKeyPress = (event: React.KeyboardEvent): void => {
+  function handleKeyPress(event: KeyboardEvent): void {
     if (event.key === "Enter") {
-      this.handleSave();
+      handleSave();
     }
-  };
+  }
 
-  handleStart = (): void => {
-    this.props.startStatement(this.props.index);
-  };
+  function handleStart(): void {
+    startStatement(index);
+  }
 
-  render(): React.ReactNode {
-    let statementArea, button;
-    if (this.state.beingEdited) {
-      statementArea = (
-        <textarea
-          value={this.state.statement}
-          onChange={this.handleChange}
-          onKeyPress={this.handleKeyPress}
-          autoFocus
-        />
-      );
-    } else {
-      statementArea = (
-        <div onClick={this.makeEditable}>{this.props.statement}</div>
-      );
-    }
-    const startText = this.props.ran ? "Restart" : "Start";
-    if (this.state.beingEdited) {
-      button = (
-        <Button text="Save" isPrimary={true} onButtonClick={this.handleSave} />
-      );
-    } else if (this.props.running) {
-      button = (
-        <Button
-          text="Stop"
-          isPrimary={true}
-          onButtonClick={this.props.endStatement}
-        />
-      );
-    } else if (this.props.otherRunning) {
-      button = <Button text={startText} isPrimary={false} />;
-    } else {
-      button = (
-        <Button
-          text={startText}
-          isPrimary={!this.props.ran}
-          onButtonClick={this.handleStart}
-        />
-      );
-    }
-    return (
-      <div className="item aot--statement">
-        {statementArea}
-        <div>{button}</div>
-      </div>
+  let statementArea, button;
+  if (beingEdited) {
+    statementArea = (
+      <textarea
+        value={editStatement}
+        onChange={handleChange}
+        onKeyPress={handleKeyPress}
+        autoFocus
+      />
+    );
+  } else {
+    statementArea = <div onClick={makeEditable}>{statement}</div>;
+  }
+  const startText = ran ? "Restart" : "Start";
+  if (beingEdited) {
+    button = <Button text="Save" isPrimary={true} onButtonClick={handleSave} />;
+  } else if (running) {
+    button = (
+      <Button text="Stop" isPrimary={true} onButtonClick={endStatement} />
+    );
+  } else if (otherRunning) {
+    button = <Button text={startText} isPrimary={false} />;
+  } else {
+    button = (
+      <Button text={startText} isPrimary={!ran} onButtonClick={handleStart} />
     );
   }
+  return (
+    <div className="item aot--statement">
+      {statementArea}
+      <div>{button}</div>
+    </div>
+  );
 }
