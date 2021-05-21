@@ -247,8 +247,9 @@ function ControlPanel({
 
   function autoAdd(): void {
     const allCallers = callHandler.getCallers();
-    const existing = allCallers.filter((caller) => caller.state === "active")
-      .length;
+    const existing = allCallers.filter(
+      (caller) => caller.state === "active"
+    ).length;
     const eligable = allCallers.filter((caller) => caller.state === "calling");
     // TODO Better algorithm than pure random
     const [accepted, rejected] = pick(eligable, maxRoamers - existing);
