@@ -18,8 +18,8 @@ jobs:
 
     - name: install
       run: yarn install
-    - name: iormat
-      run: yarn format
+    - name: format
+      run: yarn fmt
     - name: build
       run: yarn build
     - name: lint
