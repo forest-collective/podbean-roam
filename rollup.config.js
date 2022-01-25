@@ -18,6 +18,7 @@ export default {
       include: "node_modules/**",
     }),
     replace({
+      preventAssignment: true,
       "process.env.NODE_ENV": "'production'",
     }),
   ],

@@ -6,9 +6,9 @@
   "author": "Erik Brinkman <erik.brinkman@gmail.com>",
   "license": "GPL-3.0-or-later",
   "scripts": {
-    "format": "prettier --write manifest.base.json package.json tsconfig.json rollup.config.js manifest.ts .eslintrc.json style.css 'src/**/*.{ts,tsx}'",
+    "fmt": "prettier --write manifest.base.json package.json tsconfig.json rollup.config.js manifest.ts .eslintrc.json style.css 'src/**/*.{ts,tsx}'",
     "lint": "eslint src --ext .ts,.tsx",
-    "docs": "typedoc --out docs src",
+    "doc": "typedoc --out docs src",
     "build": "tsc && rollup -c -o index.js && node manifest.js",
     "prod": "tsc && rollup -c | terser -c -o index.js && node manifest.js && zip podbean-roam.zip manifest.json index.js style.css img/rom_*.png"
   },
